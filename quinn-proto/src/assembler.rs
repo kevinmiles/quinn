@@ -5,7 +5,7 @@ use bytes::Bytes;
 
 /// Helper to assemble unordered stream frames into an ordered stream
 #[derive(Debug)]
-pub struct Assembler {
+pub(crate) struct Assembler {
     offset: u64,
     data: BinaryHeap<Chunk>,
 }
