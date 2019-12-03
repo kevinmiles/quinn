@@ -120,8 +120,8 @@ fn run(options: Opt) -> Result<()> {
             .await
             .map_err(|e| anyhow!("failed to open stream: {}", e))?;
         if rebind {
-            let socket = std::net::UdpSocket::bind("[::]:0").unwrap();
-            let addr = socket.local_addr().unwrap();
+            let socket = std::net::UdpSocket::bind("[::]:0")?;
+            let addr = socket.local_addr()?;
             eprintln!("rebinding to {}", addr);
             endpoint.rebind(socket).expect("rebind failed");
         }
@@ -144,8 +144,8 @@ fn run(options: Opt) -> Result<()> {
             duration,
             resp.len() as f32 / (duration_secs(&duration) * 1024.0)
         );
-        io::stdout().write_all(&resp).unwrap();
-        io::stdout().flush().unwrap();
+        io::stdout().write_all(&resp)?;
+        io::stdout().flush()?;
         conn.close(0u32.into(), b"done");
         Ok(())
     });

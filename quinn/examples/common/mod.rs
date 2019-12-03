@@ -16,11 +16,13 @@ pub fn make_client_endpoint<A: ToSocketAddrs>(
     bind_addr: A,
     server_certs: &[&[u8]],
 ) -> Result<(Endpoint, EndpointDriver), Box<dyn Error>> {
-    let client_cfg = configure_client(server_certs)?;
-    let mut endpoint_builder = Endpoint::builder();
-    endpoint_builder.default_client_config(client_cfg);
-    let (driver, endpoint, _incoming) =
-        endpoint_builder.bind(&bind_addr.to_socket_addrs().unwrap().next().unwrap())?;
+    let config = configure_client(server_certs)?;
+
+    let mut builder = Endpoint::builder();
+    builder.default_client_config(config);
+
+    let (driver, endpoint, _) = builder.bind(&bind_addr.to_socket_addrs()?.next().unwrap())?;
+
     Ok((endpoint, driver))
 }
 
@@ -30,18 +32,21 @@ pub fn make_client_endpoint<A: ToSocketAddrs>(
 /// ## Returns
 ///
 /// - UDP socket driver
-/// - a sream of incoming QUIC connections
+/// - a stream of incoming QUIC connections
 /// - server certificate serialized into DER format
 #[allow(unused)]
 pub fn make_server_endpoint<A: ToSocketAddrs>(
     bind_addr: A,
 ) -> Result<(EndpointDriver, Incoming, Vec<u8>), Box<dyn Error>> {
-    let (server_config, server_cert) = configure_server()?;
-    let mut endpoint_builder = Endpoint::builder();
-    endpoint_builder.listen(server_config);
-    let (driver, _endpoint, incoming) =
-        endpoint_builder.bind(&bind_addr.to_socket_addrs().unwrap().next().unwrap())?;
-    Ok((driver, incoming, server_cert))
+    let (server_config, server_certificate) = configure_server()?;
+
+    let mut builder = Endpoint::builder();
+    builder.listen(server_config);
+
+    let (driver, _endpoint, incoming) = builder
+        .bind(&bind_addr.to_socket_addrs()?.next().unwrap())?;
+
+    Ok((driver, incoming, server_certificate))
 }
 
 /// Builds default quinn client config and trusts given certificates.
@@ -50,19 +55,21 @@ pub fn make_server_endpoint<A: ToSocketAddrs>(
 ///
 /// - server_certs: a list of trusted certificates in DER format.
 fn configure_client(server_certs: &[&[u8]]) -> Result<ClientConfig, Box<dyn Error>> {
-    let mut cfg_builder = ClientConfigBuilder::default();
+    let mut config_builder = ClientConfigBuilder::default();
+
     for cert in server_certs {
-        cfg_builder.add_certificate_authority(Certificate::from_der(&cert)?)?;
+        config_builder.add_certificate_authority(Certificate::from_der(&cert)?)?;
     }
-    Ok(cfg_builder.build())
+
+    Ok(config_builder.build())
 }
 
 /// Returns default server configuration along with its certificate.
 fn configure_server() -> Result<(ServerConfig, Vec<u8>), Box<dyn Error>> {
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let cert_der = cert.serialize_der().unwrap();
-    let priv_key = cert.serialize_private_key_der();
-    let priv_key = PrivateKey::from_der(&priv_key)?;
+    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let certificate_der = certificate.serialize_der().unwrap();
+    let private_key = certificate.serialize_private_key_der();
+    let private_key = PrivateKey::from_der(&private_key)?;
 
     let server_config = ServerConfig {
         transport: Arc::new(TransportConfig {
@@ -71,11 +78,13 @@ fn configure_server() -> Result<(ServerConfig, Vec<u8>), Box<dyn Error>> {
         }),
         ..Default::default()
     };
-    let mut cfg_builder = ServerConfigBuilder::new(server_config);
-    let cert = Certificate::from_der(&cert_der)?;
-    cfg_builder.certificate(CertificateChain::from_certs(vec![cert]), priv_key)?;
 
-    Ok((cfg_builder.build(), cert_der))
+    let certificate = Certificate::from_der(&certificate_der)?;
+
+    let mut config_builder = ServerConfigBuilder::new(server_config);
+    config_builder.certificate(CertificateChain::from_certs(vec![certificate]), private_key)?;
+
+    Ok((config_builder.build(), certificate_der))
 }
 
 #[allow(unused)]
