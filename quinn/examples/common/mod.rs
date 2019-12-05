@@ -43,8 +43,8 @@ pub fn make_server_endpoint<A: ToSocketAddrs>(
     let mut builder = Endpoint::builder();
     builder.listen(server_config);
 
-    let (driver, _endpoint, incoming) = builder
-        .bind(&bind_addr.to_socket_addrs()?.next().unwrap())?;
+    let (driver, _endpoint, incoming) =
+        builder.bind(&bind_addr.to_socket_addrs()?.next().unwrap())?;
 
     Ok((driver, incoming, server_certificate))
 }
