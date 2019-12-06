@@ -26,10 +26,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = Builder::new().basic_scheduler().enable_all().build()?;
 
     let server_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), SERVER_PORT));
+
     let (driver, mut incoming, server_cert) =
         runtime.enter(|| make_server_endpoint(server_addr))?;
+
     // drive server's UDP socket
     runtime.spawn(driver.unwrap_or_else(|e| panic!("IO error: {}", e)));
+
     // accept a single connection
     runtime.spawn(async move {
         let incoming_conn = incoming.next().await.unwrap();
@@ -47,8 +50,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (endpoint, driver) =
         runtime.enter(|| make_client_endpoint("0.0.0.0:0", &[&server_cert]))?;
+
     // drive client's UDP socket
     runtime.spawn(driver.unwrap_or_else(|e| panic!("IO error: {}", e)));
+
     // connect to server
     let handle = runtime.spawn(async move {
         let quinn::NewConnection {
@@ -58,13 +63,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap()
             .await
             .unwrap();
+
         println!(
             "[client] connected: id={}, addr={}",
             connection.remote_id(),
             connection.remote_address()
         );
+
         // Dropping handles allows the corresponding objects to automatically shut down
         drop((endpoint, connection));
+
         // Drive the connection to completion
         driver.await.unwrap();
     });

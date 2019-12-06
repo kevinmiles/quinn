@@ -37,35 +37,41 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// Runs a QUIC server bound to given address.
 fn run_server<A: ToSocketAddrs>(runtime: &mut Runtime, addr: A) -> Result<(), Box<dyn Error>> {
     let (driver, mut incoming, _server_cert) = runtime.enter(|| make_server_endpoint(addr))?;
+
     // drive UDP socket
     runtime.spawn(driver.unwrap_or_else(|e| panic!("IO error: {}", e)));
+
     // accept a single connection
     runtime.spawn(async move {
         let incoming_conn = incoming.next().await.unwrap();
         let new_conn = incoming_conn.await.unwrap();
+
         println!(
             "[server] connection accepted: id={} addr={}",
             new_conn.connection.remote_id(),
             new_conn.connection.remote_address()
         );
+
         // Drive the connection to completion
         if let Err(e) = new_conn.driver.await {
             println!("[server] connection lost: {}", e);
         }
     });
+
     Ok(())
 }
 
 fn run_client(runtime: &mut Runtime, server_port: u16) -> Result<JoinHandle<()>, Box<dyn Error>> {
-    let client_cfg = configure_client();
+    let config = configure_client();
     let mut endpoint_builder = Endpoint::builder();
-    endpoint_builder.default_client_config(client_cfg);
+    endpoint_builder.default_client_config(config);
 
     let (driver, endpoint, _) =
         runtime.enter(|| endpoint_builder.bind(&"0.0.0.0:0".parse().unwrap()))?;
     runtime.spawn(driver.unwrap_or_else(|e| panic!("IO error: {}", e)));
 
     let server_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), server_port));
+
     // connect to server
     let handle = runtime.spawn(async move {
         let quinn::NewConnection {
@@ -75,11 +81,13 @@ fn run_client(runtime: &mut Runtime, server_port: u16) -> Result<JoinHandle<()>,
             .unwrap()
             .await
             .unwrap();
+
         println!(
             "[client] connected: id={}, addr={}",
             connection.remote_id(),
             connection.remote_address()
         );
+
         // Dropping handles allows the corresponding objects to automatically shut down
         drop((endpoint, connection));
         // Drive the connection to completion
@@ -112,11 +120,12 @@ impl rustls::ServerCertVerifier for SkipServerVerification {
 }
 
 fn configure_client() -> ClientConfig {
-    let mut cfg = ClientConfigBuilder::default().build();
-    let tls_cfg: &mut rustls::ClientConfig = Arc::get_mut(&mut cfg.crypto).unwrap();
+    let mut config = ClientConfig::default();
+    let tls_config: &mut rustls::ClientConfig = Arc::get_mut(&mut config.crypto).unwrap();
+
     // this is only available when compiled with "dangerous_configuration" feature
-    tls_cfg
+    tls_config
         .dangerous()
         .set_certificate_verifier(SkipServerVerification::new());
-    cfg
+    config
 }

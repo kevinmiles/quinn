@@ -45,6 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (client, driver) = runtime.enter(|| {
         make_client_endpoint("0.0.0.0:0", &[&server1_cert, &server2_cert, &server3_cert])
     })?;
+
     // drive UDP socket
     let handle = runtime.spawn(driver.unwrap_or_else(|e| panic!("IO error: {}", e)));
 
@@ -52,6 +53,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_client(&mut runtime, &client, 5000)?;
     run_client(&mut runtime, &client, 5001)?;
     run_client(&mut runtime, &client, 5002)?;
+
     drop(client);
 
     runtime.block_on(handle)?;
@@ -61,18 +63,22 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// Runs a QUIC server bound to given address and returns server certificate.
 fn run_server<A: ToSocketAddrs>(runtime: &mut Runtime, addr: A) -> Result<Vec<u8>, Box<dyn Error>> {
     let (driver, mut incoming, server_cert) = runtime.enter(|| make_server_endpoint(addr))?;
+
     // drive UDP socket
     runtime.spawn(driver.unwrap_or_else(|e| panic!("IO error: {}", e)));
+
     // accept a single connection
     runtime.spawn(async move {
         let quinn::NewConnection {
             driver, connection, ..
         } = incoming.next().await.unwrap().await.unwrap();
+
         println!(
             "[server] incoming connection: id={} addr={}",
             connection.remote_id(),
             connection.remote_address()
         );
+
         let _ = driver.await;
     });
 
@@ -86,6 +92,7 @@ fn run_client(
     server_port: u16,
 ) -> Result<(), Box<dyn Error>> {
     let server_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), server_port));
+
     runtime.spawn(
         endpoint
             .connect(&server_addr, "localhost")?
